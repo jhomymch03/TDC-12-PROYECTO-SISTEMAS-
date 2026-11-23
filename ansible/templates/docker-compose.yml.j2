@@ -1,0 +1,29 @@
+services:
+  web:
+    image: {{ docker_image }}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgres://portfolio:{{ (saved_password.content | b64decode | trim) }}@db:5432/portfolio
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:3000"
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: portfolio
+      POSTGRES_USER: portfolio
+      POSTGRES_PASSWORD: "{{ (saved_password.content | b64decode | trim) }}"
+    volumes:
+      - portfolio_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U portfolio -d portfolio"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  portfolio_data:

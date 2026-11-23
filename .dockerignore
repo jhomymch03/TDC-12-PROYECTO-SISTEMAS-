@@ -1,0 +1,8 @@
+node_modules
+.git
+.github
+terraform
+ansible
+playwright-report
+test-results
+.env*

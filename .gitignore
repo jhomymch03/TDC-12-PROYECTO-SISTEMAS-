@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+terraform/.terraform/
+terraform/*.tfstate*
+terraform/*.tfvars
+!terraform/terraform.tfvars.example
+terraform/.terraform.lock.hcl
+playwright-report/
+test-results/
