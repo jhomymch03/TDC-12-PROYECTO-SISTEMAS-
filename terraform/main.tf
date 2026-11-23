@@ -46,7 +46,7 @@ resource "oci_core_security_list" "portfolio" {
     protocol    = "6"
     source      = var.ssh_allowed_cidr
     source_type = "CIDR_BLOCK"
-    description = "SSH administrativo restringido a la IP del usuario"
+    description = "SSH restringido a la IP de salida del runner de CI"
 
     tcp_options {
       min = 22

@@ -109,13 +109,18 @@ jobs:
             -backend-config="key=portfolio/terraform.tfstate" \
             -backend-config="region=$OCI_REGION" \
             -backend-config="config_file_profile=DEFAULT"
+      - name: Detectar IP de salida del runner para SSH
+        id: runner-ip
+        run: |
+          RUNNER_IP="$(curl -4fsS https://api.ipify.org)"
+          echo "cidr=${RUNNER_IP}/32" >> "$GITHUB_OUTPUT"
       - name: Provisionar VM y DNS Cloudflare
         working-directory: terraform
         env:
           TF_VAR_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
           TF_VAR_compartment_ocid: ${{ vars.OCI_COMPARTMENT_OCID }}
           TF_VAR_region: ${{ vars.OCI_REGION }}
-          TF_VAR_ssh_allowed_cidr: ${{ vars.SSH_ALLOWED_CIDR }}
+          TF_VAR_ssh_allowed_cidr: ${{ steps.runner-ip.outputs.cidr }}
           TF_VAR_ssh_public_key: ${{ vars.OCI_SSH_PUBLIC_KEY }}
           TF_VAR_cloudflare_zone_id: ${{ secrets.CLOUDFLARE_ZONE_ID }}
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}

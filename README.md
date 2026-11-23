@@ -68,16 +68,16 @@ No compartas estos secretos por chat ni los agregues a `.env`, `.tfvars`, Git o 
 
 | Nombre | Valor |
 | --- | --- |
-| `OCI_REGION` | Región OCI, por ejemplo `us-ashburn-1`. |
+| `OCI_REGION` | Región OCI, por ejemplo `sa-santiago-1`. |
 | `OCI_COMPARTMENT_OCID` | OCID del compartimento donde se crearán red y VM. |
 | `OCI_OBJECT_STORAGE_NAMESPACE` | Namespace de Object Storage de la tenancy. |
 | `OCI_TFSTATE_BUCKET` | Bucket privado de Object Storage, creado antes del primer despliegue. |
 | `OCI_SSH_PUBLIC_KEY` | Clave pública SSH correspondiente a `OCI_SSH_PRIVATE_KEY`. |
-| `SSH_ALLOWED_CIDR` | Tu IP pública seguida de `/32`, para restringir SSH. |
+| `SSH_ALLOWED_CIDR` | No requiere variable en GitHub: el workflow calcula la IP de salida del runner y limita SSH a esa IP `/32` durante el despliegue. |
 | `DOMAIN_NAME` | Dominio raíz cuya zona DNS está activa en Cloudflare, sin `https://`. |
 | `LETSENCRYPT_EMAIL` | Correo válido para emitir el certificado TLS. |
 
-`OCI_REGION` debe ser la región donde se creó el bucket de estado. El bucket debe tener acceso privado y versionado habilitado. Terraform usa el backend nativo de OCI, que requiere Terraform 1.12 o posterior.
+`OCI_REGION` debe ser la región donde se creó el bucket de estado. El bucket debe ser privado; el versionado se recomienda para conservar revisiones del estado. El workflow obtiene la IP pública de salida del runner y limita SSH al CIDR `/32` de esa ejecución. Terraform usa el backend nativo de OCI, que requiere Terraform 1.12 o posterior.
 
 ## Preparar OCI y Cloudflare
 
