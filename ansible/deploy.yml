@@ -114,19 +114,15 @@
         src: templates/nginx-http.conf.j2
         dest: /etc/nginx/sites-available/portfolio
         mode: '0644'
-      when: site_domain | length > 0
     - name: Habilitar sitio HTTP
       ansible.builtin.file:
         src: /etc/nginx/sites-available/portfolio
         dest: /etc/nginx/sites-enabled/portfolio
         state: link
-      when: site_domain | length > 0
     - name: Deshabilitar sitio por defecto de Nginx
       ansible.builtin.file: { path: /etc/nginx/sites-enabled/default, state: absent }
-      when: site_domain | length > 0
     - name: Iniciar Nginx para el desafÃ­o ACME
       ansible.builtin.service: { name: nginx, state: started, enabled: true }
-      when: site_domain | length > 0
     - name: Solicitar certificado Let's Encrypt
       ansible.builtin.command: >-
         certbot --nginx --non-interactive --agree-tos --redirect
@@ -143,7 +139,6 @@
       notify: Recargar Nginx
     - name: Asegurar que Nginx estÃ¡ activo
       ansible.builtin.service: { name: nginx, state: started, enabled: true }
-      when: site_domain | length > 0
     - name: Levantar servicios del portafolio
       ansible.builtin.command: docker compose up -d --pull always
       args:

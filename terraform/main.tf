@@ -1,3 +1,6 @@
+locals {
+  cloudflare_enabled = var.domain_name != "" && var.cloudflare_zone_id != "" && var.cloudflare_api_token != ""
+}
 data "oci_identity_availability_domains" "available" {
   compartment_id = var.compartment_ocid
 }
@@ -138,6 +141,7 @@ data "oci_core_vnic" "portfolio" {
 }
 
 resource "cloudflare_record" "root" {
+  count           = local.cloudflare_enabled ? 1 : 0
   zone_id         = var.cloudflare_zone_id
   name            = "@"
   content         = data.oci_core_vnic.portfolio.public_ip_address
@@ -148,6 +152,7 @@ resource "cloudflare_record" "root" {
 }
 
 resource "cloudflare_record" "www" {
+  count           = local.cloudflare_enabled ? 1 : 0
   zone_id         = var.cloudflare_zone_id
   name            = "www"
   content         = var.domain_name
@@ -156,4 +161,6 @@ resource "cloudflare_record" "www" {
   ttl             = 1
   allow_overwrite = true
 }
+
+
 

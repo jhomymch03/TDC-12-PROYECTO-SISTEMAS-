@@ -48,22 +48,26 @@ variable "ssh_public_key" {
 }
 
 variable "cloudflare_api_token" {
-  description = "API token de Cloudflare con permisos para editar DNS."
+  description = "API token de Cloudflare con permisos para editar DNS (opcional si aún no hay dominio)."
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "cloudflare_zone_id" {
-  description = "Zone ID de la zona Cloudflare."
+  description = "Zone ID de la zona Cloudflare (opcional si aún no hay dominio)."
   type        = string
+  default     = ""
 }
 
 variable "domain_name" {
-  description = "Dominio raíz administrado en Cloudflare."
+  description = "Dominio raíz administrado en Cloudflare. Déjalo vacío para desplegar solo en la IP pública."
   type        = string
+  default     = ""
 }
 
 variable "dockerhub_image" {
   description = "Imagen ARM64 publicada en Docker Hub."
   type        = string
 }
+
