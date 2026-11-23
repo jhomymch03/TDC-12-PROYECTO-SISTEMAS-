@@ -15,15 +15,16 @@ export default function App() {
 
   async function submitContact(event) {
     event.preventDefault();
+    const formElement = event.currentTarget;
     setBusy(true);
     setStatus('');
-    const form = new FormData(event.currentTarget);
+    const form = new FormData(formElement);
     try {
       const response = await fetch('/api/contact', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.fromEntries(form)) });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'No se pudo enviar el mensaje.');
       setStatus('¡Gracias! Tu mensaje fue enviado.');
-      event.currentTarget.reset();
+      formElement.reset();
     } catch (error) {
       setStatus(error.message || 'No se pudo conectar con el servidor.');
     } finally { setBusy(false); }
