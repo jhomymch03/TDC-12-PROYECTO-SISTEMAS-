@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
-const projects = [
+const fallbackProjects = [
   { id: 'titulaciones', number: '01', category: 'Proyecto universitario', title: 'Sistema de Titulaciones', description: 'Proyecto desarrollado para la universidad, enfocado en apoyar la gestión del proceso de titulación.', technologies: ['Sistema universitario', 'Gestión de información'], symbol: 'ST' },
   { id: 'vet-care', number: '02', category: 'Aplicación web', title: 'Vet Care', description: 'Aplicación web para gestionar citas y pacientes de una veterinaria.', technologies: ['React', 'Node.js', 'SQL Server'], symbol: 'VC' },
   { id: 'sudoku', number: '03', category: 'Aplicación de escritorio', title: 'Sudoku', description: 'Juego de Sudoku de escritorio creado como proyecto de programación.', technologies: ['C#', 'WPF', 'MVVM'], symbol: '数' },
@@ -9,8 +9,13 @@ const projects = [
 const skills = ['JavaScript', 'React', 'Node.js', 'HTML & CSS', 'SQL', 'C#', 'Git'];
 
 export default function App() {
+  const [projects, setProjects] = useState(fallbackProjects);
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/projects').then((response) => response.ok ? response.json() : Promise.reject()).then(setProjects).catch(() => {});
+  }, []);
 
   async function submitContact(event) {
     event.preventDefault();
@@ -85,7 +90,7 @@ export default function App() {
           <div className="project-grid">
             {projects.map((project, index) => (
               <article className={'project-card project-' + (index + 1)} key={project.id}>
-                <div className="project-art"><span className="project-number">{project.number} / 04</span><span className="project-symbol" aria-hidden="true">{project.symbol}</span><span className="project-category">{project.category}</span></div>
+                <div className="project-art"><span className="project-number">{String(index + 1).padStart(2, '0')} / 04</span><span className="project-symbol" aria-hidden="true">{project.symbol || project.title.slice(0, 2).toUpperCase()}</span><span className="project-category">{project.category || (index === 0 ? "Proyecto universitario" : "Proyecto académico")}</span></div>
                 <div className="project-content"><h3>{project.title}</h3><p>{project.description}</p><div className="project-tags">{project.technologies.map((item) => <span key={item}>{item}</span>)}</div></div>
               </article>
             ))}
@@ -116,3 +121,4 @@ export default function App() {
     </>
   );
 }
+
