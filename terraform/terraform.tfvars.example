@@ -1,9 +1,15 @@
-aws_region = "us-east-1"
-project_name = "portfolio-tdc12"
-instance_type = "t3.small"
-key_name = "NOMBRE_DE_TU_KEY_PAIR_EC2"
-ssh_allowed_cidr = "TU_IP_PUBLICA/32"
+tenancy_ocid       = "ocid1.tenancy.oc1..REEMPLAZAR"
+compartment_ocid   = "ocid1.compartment.oc1..REEMPLAZAR"
+region             = "us-ashburn-1"
+project_name       = "portfolio-tdc12"
+instance_shape     = "VM.Standard.A1.Flex"
+instance_ocpus     = 1
+instance_memory_gbs = 6
+ssh_allowed_cidr   = "TU_IP_PUBLICA/32"
+ssh_public_key     = "ssh-ed25519 AAAA...REEMPLAZAR"
 cloudflare_zone_id = "TU_CLOUDFLARE_ZONE_ID"
-domain_name = "tudominio.com"
-dockerhub_image = "TU_USUARIO_DOCKERHUB/portfolio-ci-infra:latest"
-# No escribas el token aquí: Terraform lo recibe como TF_VAR_cloudflare_api_token.
+domain_name        = "tudominio.com"
+dockerhub_image    = "jhomp/portfolio-ci-infra:latest"
+# Las credenciales OCI se leen desde el perfil DEFAULT de ~/.oci/config.
+# No guardes private keys, tokens ni OCIDs de acceso en este archivo.
+# Para Actions, usa Secrets and variables > Actions en GitHub.

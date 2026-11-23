@@ -7,6 +7,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: portfolio-oci-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   test:
     name: Pruebas automatizadas
@@ -35,55 +38,97 @@ jobs:
       - run: npm run test:integration
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.12.2
+      - name: Validar Terraform
+        working-directory: terraform
+        run: |
+          terraform fmt -check
+          terraform init -backend=false
+          terraform validate
   publish-and-deploy:
-    name: Docker Hub, AWS y Cloudflare
+    name: Docker Hub, OCI y Cloudflare
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Habilitar emulación ARM64
+        uses: docker/setup-qemu-action@v3
       - name: Configurar Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Iniciar sesiÃƒÆ’Ã‚Â³n en Docker Hub
+      - name: Iniciar sesión en Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Construir y publicar imagen
+      - name: Construir y publicar imagen ARM64
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
+          platforms: linux/arm64
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/portfolio-ci-infra:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/portfolio-ci-infra:${{ github.sha }}
       - name: Configurar Terraform
         uses: hashicorp/setup-terraform@v3
-      - name: Configurar AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-      - name: Provisionar VM e DNS Cloudflare
+          terraform_version: 1.12.2
+      - name: Configurar credenciales OCI
+        env:
+          OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+          OCI_USER_OCID: ${{ secrets.OCI_USER_OCID }}
+          OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+          OCI_TENANCY_OCID: ${{ secrets.OCI_TENANCY_OCID }}
+          OCI_REGION: ${{ vars.OCI_REGION }}
+        run: |
+          umask 077
+          mkdir -p "$HOME/.oci"
+          printf '%s\n' "$OCI_PRIVATE_KEY" > "$HOME/.oci/oci_api_key.pem"
+          cat > "$HOME/.oci/config" <<EOF
+          [DEFAULT]
+          user=$OCI_USER_OCID
+          fingerprint=$OCI_FINGERPRINT
+          tenancy=$OCI_TENANCY_OCID
+          region=$OCI_REGION
+          key_file=$HOME/.oci/oci_api_key.pem
+          EOF
+          chmod 600 "$HOME/.oci/config" "$HOME/.oci/oci_api_key.pem"
+      - name: Inicializar Terraform
         working-directory: terraform
         env:
-          TF_VAR_aws_region: ${{ vars.AWS_REGION || 'us-east-1' }}
-          TF_VAR_key_name: ${{ vars.AWS_EC2_KEY_NAME }}
+          OCI_TFSTATE_BUCKET: ${{ vars.OCI_TFSTATE_BUCKET }}
+          OCI_OBJECT_STORAGE_NAMESPACE: ${{ vars.OCI_OBJECT_STORAGE_NAMESPACE }}
+          OCI_REGION: ${{ vars.OCI_REGION }}
+        run: |
+          terraform init \
+            -backend-config="bucket=$OCI_TFSTATE_BUCKET" \
+            -backend-config="namespace=$OCI_OBJECT_STORAGE_NAMESPACE" \
+            -backend-config="key=portfolio/terraform.tfstate" \
+            -backend-config="region=$OCI_REGION" \
+            -backend-config="config_file_profile=DEFAULT"
+      - name: Provisionar VM y DNS Cloudflare
+        working-directory: terraform
+        env:
+          TF_VAR_tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
+          TF_VAR_compartment_ocid: ${{ vars.OCI_COMPARTMENT_OCID }}
+          TF_VAR_region: ${{ vars.OCI_REGION }}
           TF_VAR_ssh_allowed_cidr: ${{ vars.SSH_ALLOWED_CIDR }}
+          TF_VAR_ssh_public_key: ${{ vars.OCI_SSH_PUBLIC_KEY }}
           TF_VAR_cloudflare_zone_id: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-          TF_VAR_domain_name: ${{ vars.DOMAIN_NAME }}
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_domain_name: ${{ vars.DOMAIN_NAME }}
           TF_VAR_dockerhub_image: ${{ secrets.DOCKERHUB_USERNAME }}/portfolio-ci-infra:${{ github.sha }}
         run: |
-          terraform init -backend-config="bucket=${{ vars.AWS_TF_STATE_BUCKET }}" -backend-config="key=portfolio/terraform.tfstate" -backend-config="region=${{ vars.AWS_REGION || 'us-east-1' }}" -backend-config="encrypt=true" -backend-config="use_lockfile=true"
           terraform apply -auto-approve
           terraform output -raw public_ip > ../public_ip.txt
       - name: Instalar Ansible
         run: sudo apt-get update && sudo apt-get install -y ansible
       - name: Configurar y desplegar con Ansible
         env:
-          ANSIBLE_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          ANSIBLE_PRIVATE_KEY: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
           IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/portfolio-ci-infra:${{ github.sha }}
           CF_DOMAIN: ${{ vars.DOMAIN_NAME }}
           CERT_EMAIL: ${{ vars.LETSENCRYPT_EMAIL }}
@@ -96,3 +141,6 @@ jobs:
             --private-key /tmp/portfolio-key \
             -e "ansible_user=ubuntu docker_image=$IMAGE site_domain=$CF_DOMAIN letsencrypt_email=$CERT_EMAIL"
           rm -f /tmp/portfolio-key
+
+
+

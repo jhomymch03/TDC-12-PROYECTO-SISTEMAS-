@@ -1,120 +1,146 @@
-data "aws_availability_zones" "available" {
-  state = "available"
+data "oci_identity_availability_domains" "available" {
+  compartment_id = var.compartment_ocid
 }
 
-data "aws_ami" "ubuntu_2404" {
-  most_recent = true
-  owners      = ["099720109477"]
+data "oci_core_images" "ubuntu_2404" {
+  compartment_id           = var.compartment_ocid
+  operating_system         = "Canonical Ubuntu"
+  operating_system_version = "24.04"
+  shape                    = var.instance_shape
+  sort_by                  = "TIMECREATED"
+  sort_order               = "DESC"
+}
 
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*"]
+resource "oci_core_vcn" "portfolio" {
+  compartment_id = var.compartment_ocid
+  cidr_block     = "10.24.0.0/16"
+  display_name   = "${var.project_name}-vcn"
+  dns_label      = "portfolio"
+}
+
+resource "oci_core_internet_gateway" "portfolio" {
+  compartment_id = var.compartment_ocid
+  vcn_id         = oci_core_vcn.portfolio.id
+  display_name   = "${var.project_name}-igw"
+  enabled        = true
+}
+
+resource "oci_core_route_table" "public" {
+  compartment_id = var.compartment_ocid
+  vcn_id         = oci_core_vcn.portfolio.id
+  display_name   = "${var.project_name}-public-rt"
+
+  route_rules {
+    destination       = "0.0.0.0/0"
+    destination_type  = "CIDR_BLOCK"
+    network_entity_id = oci_core_internet_gateway.portfolio.id
   }
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
+}
+
+resource "oci_core_security_list" "portfolio" {
+  compartment_id = var.compartment_ocid
+  vcn_id         = oci_core_vcn.portfolio.id
+  display_name   = "${var.project_name}-security-list"
+
+  ingress_security_rules {
+    protocol    = "6"
+    source      = var.ssh_allowed_cidr
+    source_type = "CIDR_BLOCK"
+    description = "SSH administrativo restringido a la IP del usuario"
+
+    tcp_options {
+      min = 22
+      max = 22
+    }
   }
-}
 
-resource "aws_vpc" "portfolio" {
-  cidr_block           = "10.24.0.0/16"
-  enable_dns_support   = true
-  enable_dns_hostnames = true
-  tags                 = { Name = "${var.project_name}-vpc" }
-}
-
-resource "aws_internet_gateway" "portfolio" {
-  vpc_id = aws_vpc.portfolio.id
-  tags   = { Name = "${var.project_name}-igw" }
-}
-
-resource "aws_subnet" "public" {
-  vpc_id                  = aws_vpc.portfolio.id
-  cidr_block              = "10.24.1.0/24"
-  availability_zone       = data.aws_availability_zones.available.names[0]
-  map_public_ip_on_launch = true
-  tags                    = { Name = "${var.project_name}-public-subnet" }
-}
-
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.portfolio.id
-  tags   = { Name = "${var.project_name}-public-rt" }
-}
-
-resource "aws_route" "internet" {
-  route_table_id         = aws_route_table.public.id
-  destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.portfolio.id
-}
-
-resource "aws_route_table_association" "public" {
-  subnet_id      = aws_subnet.public.id
-  route_table_id = aws_route_table.public.id
-}
-
-resource "aws_security_group" "portfolio" {
-  name        = "${var.project_name}-sg"
-  description = "HTTP/HTTPS y SSH administrativo. VNC solo por tÃºnel SSH local."
-  vpc_id      = aws_vpc.portfolio.id
-
-  ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.ssh_allowed_cidr]
-  }
-  ingress {
+  ingress_security_rules {
+    protocol    = "6"
+    source      = "0.0.0.0/0"
+    source_type = "CIDR_BLOCK"
     description = "HTTP"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+
+    tcp_options {
+      min = 80
+      max = 80
+    }
   }
-  ingress {
+
+  ingress_security_rules {
+    protocol    = "6"
+    source      = "0.0.0.0/0"
+    source_type = "CIDR_BLOCK"
     description = "HTTPS"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+
+    tcp_options {
+      min = 443
+      max = 443
+    }
   }
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+
+  egress_security_rules {
+    protocol         = "all"
+    destination      = "0.0.0.0/0"
+    destination_type = "CIDR_BLOCK"
   }
-  tags = { Name = "${var.project_name}-sg" }
 }
 
-resource "aws_instance" "portfolio" {
-  ami                         = data.aws_ami.ubuntu_2404.id
-  instance_type               = var.instance_type
-  subnet_id                   = aws_subnet.public.id
-  vpc_security_group_ids      = [aws_security_group.portfolio.id]
-  key_name                    = var.key_name
-  associate_public_ip_address = true
-
-  root_block_device {
-    volume_size = 20
-    volume_type = "gp3"
-    encrypted   = true
-  }
-
-  user_data = "#!/bin/bash\napt-get update -y\n"
-  tags      = { Name = "${var.project_name}-vm", Project = var.project_name, Image = var.dockerhub_image }
+resource "oci_core_subnet" "public" {
+  compartment_id    = var.compartment_ocid
+  vcn_id            = oci_core_vcn.portfolio.id
+  cidr_block        = "10.24.1.0/24"
+  display_name      = "${var.project_name}-public-subnet"
+  dns_label         = "public"
+  route_table_id    = oci_core_route_table.public.id
+  security_list_ids = [oci_core_security_list.portfolio.id]
 }
 
-resource "aws_eip" "portfolio" {
-  domain   = "vpc"
-  instance = aws_instance.portfolio.id
-  tags     = { Name = "${var.project_name}-public-ip" }
+resource "oci_core_instance" "portfolio" {
+  availability_domain = data.oci_identity_availability_domains.available.availability_domains[0].name
+  compartment_id      = var.compartment_ocid
+  display_name        = "${var.project_name}-vm"
+  shape               = var.instance_shape
+
+  shape_config {
+    ocpus         = var.instance_ocpus
+    memory_in_gbs = var.instance_memory_gbs
+  }
+
+  create_vnic_details {
+    subnet_id        = oci_core_subnet.public.id
+    assign_public_ip = true
+    display_name     = "${var.project_name}-vnic"
+    hostname_label   = "portfolio"
+  }
+
+  source_details {
+    source_type             = "image"
+    source_id               = data.oci_core_images.ubuntu_2404.images[0].id
+    boot_volume_size_in_gbs = 50
+  }
+
+  metadata = {
+    ssh_authorized_keys = var.ssh_public_key
+  }
+
+  freeform_tags = {
+    Project = var.project_name
+  }
+}
+
+data "oci_core_vnic_attachments" "portfolio" {
+  compartment_id = var.compartment_ocid
+  instance_id    = oci_core_instance.portfolio.id
+}
+
+data "oci_core_vnic" "portfolio" {
+  vnic_id = data.oci_core_vnic_attachments.portfolio.vnic_attachments[0].vnic_id
 }
 
 resource "cloudflare_record" "root" {
   zone_id         = var.cloudflare_zone_id
   name            = "@"
-  content         = aws_eip.portfolio.public_ip
+  content         = data.oci_core_vnic.portfolio.public_ip_address
   type            = "A"
   proxied         = true
   ttl             = 1
@@ -130,3 +156,4 @@ resource "cloudflare_record" "www" {
   ttl             = 1
   allow_overwrite = true
 }
+
